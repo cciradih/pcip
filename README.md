@@ -13,6 +13,10 @@
 
 JDK 17 环境开箱即用（Out of the box），代码很简单，没有过度封装。
 
+```shell
+java -jar pcip-1.0.0.jar 
+```
+
 运行后控制台会输出进度以及延迟最低的 5 个 IP。
 
 > [!NOTE]
