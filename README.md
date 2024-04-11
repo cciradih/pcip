@@ -14,7 +14,7 @@ JDK 17 环境开箱即用（Out of the box），代码很简单，没有过度�
 ### 构建
 
 ```shell
-maven clean && maven package
+mvn clean && mvn package
 ```
 
 ### 运行
