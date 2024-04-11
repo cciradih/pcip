@@ -1,5 +1,6 @@
 package org.eu.cciradih.pcip;
 
+import org.apache.commons.collections4.ListUtils;
 import org.apache.commons.net.util.SubnetUtils;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
@@ -69,24 +70,29 @@ public class Main {
                 .toList();
 
         //  输出延迟最低的 5 个 IP。
-        resultList1.stream().limit(5).forEach(result -> System.out.println("Address: " + result.getAddress() + ", millisecond: " + result.getMillisecond()+"ms."));
+        resultList1.stream().limit(5).forEach(result -> System.out.println("Address: " + result.getAddress() + ", millisecond: " + result.getMillisecond() + "ms."));
+
+        //  拆分结果，XLS 支持 65_536 行和 256 列，而 XLSX 支持 1_048_576 行和 16_384 列。
+        List<List<Result>> partitionResultList = ListUtils.partition(resultList1, 1_000_000);
 
         //  生成 Excel 结果。
         Workbook workbook = new XSSFWorkbook();
-        Sheet sheet = workbook.createSheet("Address");
-        sheet.setDefaultColumnWidth(15);
-        Row headerRow = sheet.createRow(0);
-        Cell headerCell = headerRow.createCell(0);
-        headerCell.setCellValue("Address");
-        headerCell = headerRow.createCell(1);
-        headerCell.setCellValue("Millisecond");
-
-        for (int i = 0; i < resultList1.size(); i++) {
-            Row row = sheet.createRow(i + 1);
-            Cell cell = row.createCell(0);
-            cell.setCellValue(resultList1.get(i).getAddress());
-            cell = row.createCell(1);
-            cell.setCellValue(resultList1.get(i).getMillisecond());
+        for (int i = 0; i < partitionResultList.size(); i++) {
+            Sheet sheet = workbook.createSheet("Address" + i);
+            sheet.setDefaultColumnWidth(15);
+            Row headerRow = sheet.createRow(0);
+            Cell headerCell = headerRow.createCell(0);
+            headerCell.setCellValue("Address");
+            headerCell = headerRow.createCell(1);
+            headerCell.setCellValue("Millisecond");
+            List<Result> resultList2 = partitionResultList.get(i);
+            for (int j = 0; j < resultList2.size(); j++) {
+                Row row = sheet.createRow(j + 1);
+                Cell cell = row.createCell(0);
+                cell.setCellValue(resultList2.get(j).getAddress());
+                cell = row.createCell(1);
+                cell.setCellValue(resultList2.get(i).getMillisecond());
+            }
         }
 
         try (FileOutputStream outputStream = new FileOutputStream("result.xlsx")) {
