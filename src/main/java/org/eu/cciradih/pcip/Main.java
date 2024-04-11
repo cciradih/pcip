@@ -55,8 +55,7 @@ public class Main {
                     Result result = null;
                     try {
                         result = resultFuture.get();
-                    } catch (InterruptedException | ExecutionException e) {
-                        e.printStackTrace();
+                    } catch (InterruptedException | ExecutionException ignored) {
                     }
                     resultList.add(result);
                     double percentage = BigDecimal.valueOf(resultList.size())
@@ -76,27 +75,32 @@ public class Main {
         List<List<Result>> partitionResultList = ListUtils.partition(resultList1, 1_000_000);
 
         //  生成 Excel 结果。
-        Workbook workbook = new XSSFWorkbook();
-        for (int i = 0; i < partitionResultList.size(); i++) {
-            Sheet sheet = workbook.createSheet("Address" + i);
-            sheet.setDefaultColumnWidth(15);
-            Row headerRow = sheet.createRow(0);
-            Cell headerCell = headerRow.createCell(0);
-            headerCell.setCellValue("Address");
-            headerCell = headerRow.createCell(1);
-            headerCell.setCellValue("Millisecond");
-            List<Result> resultList2 = partitionResultList.get(i);
-            for (int j = 0; j < resultList2.size(); j++) {
-                Row row = sheet.createRow(j + 1);
-                Cell cell = row.createCell(0);
-                cell.setCellValue(resultList2.get(j).getAddress());
-                cell = row.createCell(1);
-                cell.setCellValue(resultList2.get(i).getMillisecond());
-            }
-        }
+        try (Workbook workbook = new XSSFWorkbook()) {
+            for (int i = 0; i < partitionResultList.size(); i++) {
+                Sheet sheet = workbook.createSheet("Address" + i);
+                sheet.setDefaultColumnWidth(15);
 
-        try (FileOutputStream outputStream = new FileOutputStream("result.xlsx")) {
-            workbook.write(outputStream);
+                Row headerRow = sheet.createRow(0);
+
+                Cell headerCell = headerRow.createCell(0);
+                headerCell.setCellValue("Address");
+                headerCell = headerRow.createCell(1);
+                headerCell.setCellValue("Millisecond");
+                List<Result> resultList2 = partitionResultList.get(i);
+
+                for (int j = 0; j < resultList2.size(); j++) {
+                    Row row = sheet.createRow(j + 1);
+
+                    Cell cell = row.createCell(0);
+                    cell.setCellValue(resultList2.get(j).getAddress());
+                    cell = row.createCell(1);
+                    cell.setCellValue(resultList2.get(i).getMillisecond());
+                }
+            }
+
+            try (FileOutputStream outputStream = new FileOutputStream("result.xlsx")) {
+                workbook.write(outputStream);
+            }
         }
     }
 }
