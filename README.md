@@ -19,6 +19,8 @@ maven clean && maven package
 
 ### 运行
 
+参考 [InetAddress.isReachable源码学习](https://aiziyuer.github.io/2016/08/14/openjdk-study-java-api-isreachable.html) 建议在 root 环境下运行。
+
 ```shell
 java -jar target/pcip-1.0.0.jar 
 ```
