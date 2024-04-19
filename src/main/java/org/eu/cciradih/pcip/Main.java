@@ -11,68 +11,83 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.text.DecimalFormat;
-import java.util.*;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class Main {
-    public static void main(String[] args) throws IOException {
-        //  设置首选 IP 的延迟，会过滤延迟高于此数值的 IP。
-        int timeout = 200;
-
-        //  设置线程数，默认使用 CPU 核心数 * 延迟。
-        int nThreads = Runtime.getRuntime().availableProcessors() * timeout;
-
-        //  获取 IP 段文件。存放在 src/main/resources/ips-v4，来源 https://www.cloudflare-cn.com/ips-v4。
-        InputStream inputStream = Thread.currentThread().getContextClassLoader().getResourceAsStream("ips-v4");
-        Objects.requireNonNull(inputStream);
-        List<String> cidrNotationList;
-        try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream))) {
-            cidrNotationList = bufferedReader.lines().toList();
-        }
+    public static void main(String[] args) throws URISyntaxException, IOException {
+        //  获取 IP 段文件，来源 https://www.cloudflare-cn.com/ips-v4。
+        InputStream inputStream = (InputStream) new URI("https://www.cloudflare-cn.com/ips-v4").toURL()
+                .getContent();
+        List<String> cidrNotationList = new BufferedReader(new InputStreamReader(inputStream)).lines()
+                .toList();
         System.out.println("CIDR notation list size: " + cidrNotationList.size());
 
-        //  获取所有可用的 IP 地址。
-        List<String> addressesList = cidrNotationList.stream()
-                .flatMap(cidrNotation -> Arrays.stream(new SubnetUtils(cidrNotation).getInfo().getAllAddresses()))
-                .toList();
-        DecimalFormat decimalFormat = new DecimalFormat("#,###");
-        System.out.println("Addresses list size: " + decimalFormat.format(addressesList.size()));
+        //  设置首选 IP 的延迟，默认 200，会过滤延迟高于此数值的 IP。
+        int timeout = 200;
 
-        //  使用线程池。
-        ExecutorService executorService = Executors.newFixedThreadPool(nThreads);
-        List<Future<Result>> resultFutureList = addressesList.stream()
-                .map(addresses -> executorService.submit(new Ping(addresses, timeout)))
+        //  获取所有可用的 IP 地址。
+        List<String> addressList = cidrNotationList.stream()
+                .flatMap(cidrNotation -> Arrays.stream(new SubnetUtils(cidrNotation)
+                        .getInfo()
+                        .getAllAddresses()))
                 .toList();
-        executorService.shutdown();
-        List<Result> resultList = new ArrayList<>();
+        int addressListSize = addressList.size();
+        DecimalFormat decimalFormat = new DecimalFormat("#,###");
+        System.out.println("Address list size: " + decimalFormat.format(addressListSize));
+
+        //  使用虚拟线程。
+        ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
+        List<Future<Result>> futureList = addressList.stream()
+                .map(address -> executorService.submit(new Connect(address, timeout)))
+                .toList();
+
+        //  开启基于 CPU 核心数的信号量限流，获取结果集。
+        Semaphore semaphore = new Semaphore(Runtime.getRuntime().availableProcessors());
+        AtomicLong processed = new AtomicLong();
+        processed.set(0L);
         DecimalFormat percentageFormat = new DecimalFormat("00.00%");
-        List<Result> resultList1 = resultFutureList.stream()
+        List<Result> resultList = futureList.stream()
                 .map(resultFuture -> {
-                    Result result = null;
                     try {
-                        result = resultFuture.get();
+                        semaphore.acquire();
+                        Result result = resultFuture.get();
+                        semaphore.release();
+
+                        long processedSize = processed.get();
+                        processed.set(processedSize + 1);
+
+                        double percentage = BigDecimal.valueOf(processedSize)
+                                .divide(BigDecimal.valueOf(addressListSize), 4, RoundingMode.HALF_UP)
+                                .doubleValue();
+
+                        System.out.print("Processed quantity: " + decimalFormat.format(processedSize) +
+                                ", current progress: " + percentageFormat.format(percentage) + "\r");
+                        return result;
                     } catch (InterruptedException | ExecutionException ignored) {
+                        return null;
                     }
-                    resultList.add(result);
-                    double percentage = BigDecimal.valueOf(resultList.size())
-                            .divide(BigDecimal.valueOf(addressesList.size()), 4, RoundingMode.HALF_UP)
-                            .doubleValue();
-                    System.out.print("Processed quantity: " + decimalFormat.format(resultList.size()) + ", current progress: " + percentageFormat.format(percentage) + "\r");
-                    return result;
                 })
                 .filter(Objects::nonNull)
                 .sorted(Comparator.comparing(Result::getMillisecond))
                 .toList();
+        executorService.close();
 
         //  输出延迟最低的 5 个 IP。
-        resultList1.stream().limit(5).forEach(result -> System.out.println("Address: " + result.getAddress() + ", millisecond: " + result.getMillisecond() + "ms."));
+        resultList.stream()
+                .limit(5)
+                .forEach(result -> System.out.println("Address: " + result.getAddress() + ", millisecond: " +
+                        result.getMillisecond() + "ms."));
 
-        //  拆分结果，XLS 支持 65_536 行和 256 列，而 XLSX 支持 1_048_576 行和 16_384 列。
-        List<List<Result>> partitionResultList = ListUtils.partition(resultList1, 1_000_000);
+        //  拆分结果，每 1_000_000 一张表，XLS 支持 65_536 行和 256 列，XLSX 支持 1_048_576 行和 16_384 列。
+        List<List<Result>> partitionResultList = ListUtils.partition(resultList, 1_000_000);
 
         //  生成 Excel 结果。
         try (Workbook workbook = new XSSFWorkbook()) {
@@ -94,7 +109,7 @@ public class Main {
                     Cell cell = row.createCell(0);
                     cell.setCellValue(resultList2.get(j).getAddress());
                     cell = row.createCell(1);
-                    cell.setCellValue(resultList2.get(i).getMillisecond());
+                    cell.setCellValue(resultList2.get(j).getMillisecond());
                 }
             }
 
