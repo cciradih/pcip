@@ -23,22 +23,43 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class Main {
     public static void main(String[] args) throws URISyntaxException, IOException {
-        //  获取 IP 段文件，来源 https://www.cloudflare-cn.com/ips-v4。
-        InputStream inputStream = (InputStream) new URI("https://www.cloudflare-cn.com/ips-v4").toURL()
-                .getContent();
-        List<String> cidrNotationList = new BufferedReader(new InputStreamReader(inputStream)).lines()
-                .toList();
-        System.out.println("CIDR notation list size: " + cidrNotationList.size());
+        if (args.length != 1) {
+            System.out.println("Please enter the correct args: ip or warp");
+            return;
+        }
 
-        //  设置首选 IP 的延迟，默认 200，会过滤延迟高于此数值的 IP。
-        int timeout = 200;
+        //  设置首选 IP 的延迟，默认 5000，会过滤延迟高于此数值的 IP。
+        int timeout = 5000;
 
+        String arg = args[0];
         //  获取所有可用的 IP 地址。
-        List<String> addressList = cidrNotationList.stream()
-                .flatMap(cidrNotation -> Arrays.stream(new SubnetUtils(cidrNotation)
-                        .getInfo()
-                        .getAllAddresses()))
-                .toList();
+        List<String> addressList = switch (arg) {
+            case "ip" -> {
+                //  获取 IP 段文件，来源 https://www.cloudflare-cn.com/ips-v4。
+                InputStream inputStream = (InputStream) new URI("https://www.cloudflare-cn.com/ips-v4").toURL()
+                        .getContent();
+                List<String> cidrNotationList = new BufferedReader(new InputStreamReader(inputStream)).lines()
+                        .toList();
+                System.out.println("CIDR notation list size: " + cidrNotationList.size());
+
+                yield cidrNotationList.stream()
+                        .flatMap(cidrNotation -> Arrays.stream(new SubnetUtils(cidrNotation)
+                                .getInfo()
+                                .getAllAddresses()))
+                        .toList();
+            }
+            case "warp" -> Arrays.stream(new SubnetUtils("162.159.192.0/24")
+                            .getInfo()
+                            .getAllAddresses())
+                    .toList();
+            default -> null;
+        };
+
+        if (addressList == null) {
+            System.out.println("Please enter the correct args: ip or warp");
+            return;
+        }
+
         int addressListSize = addressList.size();
         DecimalFormat decimalFormat = new DecimalFormat("#,###");
         System.out.println("Address list size: " + decimalFormat.format(addressListSize));
@@ -46,7 +67,7 @@ public class Main {
         //  使用虚拟线程。
         ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
         List<Future<Result>> futureList = addressList.stream()
-                .map(address -> executorService.submit(new Connect(address, timeout)))
+                .map(address -> executorService.submit(new Connect(address, timeout, arg)))
                 .toList();
 
         //  开启基于 CPU 核心数的信号量限流，获取结果集。

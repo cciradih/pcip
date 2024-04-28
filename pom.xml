@@ -6,7 +6,13 @@
 
     <groupId>org.eu.cciradih</groupId>
     <artifactId>pcip</artifactId>
-    <version>1.1.0</version>
+    <version>1.1.1</version>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -31,11 +37,7 @@
             <version>1.26.1</version>
         </dependency>
     </dependencies>
-    <properties>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
-    </properties>
+
     <build>
         <plugins>
             <plugin>
@@ -49,6 +51,10 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <entryPoints>
+                                <entryPoint>org.eu.cciradih.pcip.Main</entryPoint>
+                            </entryPoints>
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>
@@ -58,7 +64,7 @@
                                     </excludes>
                                 </filter>
                             </filters>
-                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <minimizeJar>true</minimizeJar>
                             <transformers>
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
