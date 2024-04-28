@@ -28,8 +28,8 @@ public class Main {
             return;
         }
 
-        //  设置首选 IP 的延迟，默认 5000，会过滤延迟高于此数值的 IP。
-        int timeout = 5000;
+        //  设置首选 IP 的延迟，默认 200，会过滤延迟高于此数值的 IP。
+        int timeout = 200;
 
         String arg = args[0];
         //  获取所有可用的 IP 地址。

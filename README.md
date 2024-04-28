@@ -38,7 +38,7 @@ java -jar target/pcip-1.1.1.jar warp
 > Cloudflare IP 结果集中的延迟是 Socket Port 7 Echo 服务的结果。Cloudflare WARP IP 结果集在 root 权限下是 Ping ICMP 协议的结果。
 
 > [!NOTE]
-> 首选 IP 的延迟默认为 5000ms，会尽量过滤延迟高于此数值的 IP。
+> 首选 IP 的延迟默认为 200ms，会尽量过滤延迟高于此数值的 IP。
 
 > [!NOTE]
 > IP 段来源 [IP 地址范围 | Cloudflare](https://www.cloudflare-cn.com/ips-v4)。
